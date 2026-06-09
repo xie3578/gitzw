@@ -8,7 +8,20 @@ binding = "DB"
 database_name = "gitzw-db"
 database_id = ""
 
-# 环境变量
+# D1 数据库迁移
+[[migrations]]
+tag = "v1"
+new_directory = "migrations/001_create_tables.sql"
+
+[[migrations]]
+tag = "v2"
+new_directory = "migrations/002_add_indexes.sql"
+
+# ========== 环境变量 ==========
+# 🔴 重要：部署前必须设置以下环境变量
+# 通过 `npx wrangler secret put JWT_SECRET` 设置生产密钥
+# 通过 Cloudflare Dashboard → Workers → gitzw → Settings → Variables 设置
+
 [vars]
 ADMIN_EMAIL = "admin@example.com"
 ADMIN_PASSWORD = "admin123456"
