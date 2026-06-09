@@ -9,7 +9,7 @@
     <div v-else-if="error" class="error">{{ error }}</div>
     <div v-else-if="repos.length === 0" class="empty-state">
       <p>暂无收藏的仓库</p>
-      <router-link to="/" class="btn btn-primary mt-2">去热榜看看</router-link>
+      <router-link to="/" class="btn btn-primary mt-2">去仓库看看</router-link>
     </div>
     <div v-else class="grid">
       <RepoCard v-for="repo in repos" :key="repo.id" :repo="repo" :initialFavorited="true" @unfavorited="removeRepo" />

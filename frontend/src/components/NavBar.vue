@@ -5,7 +5,7 @@
         <span class="brand-icon">🔥</span> Gitzw
       </router-link>
       <div class="nav-links">
-        <router-link to="/" class="nav-link">热榜</router-link>
+        <router-link to="/" class="nav-link">仓库</router-link>
         <router-link v-if="token" to="/favorites" class="nav-link">收藏</router-link>
         <router-link v-if="token" to="/subscription" class="nav-link">订阅</router-link>
         <router-link v-if="isAdmin" to="/admin" class="nav-link">管理</router-link>

@@ -13,7 +13,7 @@
     </div>
 
     <!-- 加载 / 错误 / 空状态 -->
-    <div v-if="loading" class="loading">正在加载热榜数据...</div>
+    <div v-if="loading" class="loading">正在加载仓库数据...</div>
     <div v-else-if="error" class="error">{{ error }}</div>
     <div v-else-if="repos.length === 0" class="empty-state">
       <p>暂无数据，请稍后再来</p>
@@ -54,7 +54,7 @@ const language = ref('')
 const keyword = ref('')
 const favoritedIds = ref(new Set())
 
-const title = 'GitHub 中文热榜'
+const title = '私有仓库展示'
 
 onMounted(async () => {
   await Promise.all([
@@ -85,7 +85,7 @@ async function fetchRepos(p) {
     repos.value = res.data.repos || res.data.data || []
     totalPages.value = res.data.totalPages || Math.ceil((res.data.total || 0) / 20) || 1
   } catch (err) {
-    error.value = err.response?.data?.error || '加载热榜失败'
+    error.value = err.response?.data?.error || '加载仓库数据失败'
   } finally {
     loading.value = false
   }

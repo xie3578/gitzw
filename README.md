@@ -1,10 +1,10 @@
-# Gitzw - GitHub 热榜中文站
+# Gitzw - 私有仓库展示站
 
-基于 Cloudflare Workers + D1 + Pages 的全栈 GitHub Trending 中文展示站。
+基于 Cloudflare Workers + D1 + Pages 的全栈私有仓库中文展示站。
 
 ## 功能特点
 
-- 📊 每 3 小时自动抓取 GitHub Trending 仓库
+- 🔒 每 3 小时自动抓取私有仓库数据（需配置 GITHUB_TOKEN）
 - 🌐 AI 自动翻译仓库名、描述为中文，生成摘要和标签
 - 👤 用户注册/登录，收藏仓库
 - 📧 邮件订阅每日热门仓库推送
@@ -34,7 +34,7 @@ gitzw/
 │   │   ├── favorites.js# 收藏管理
 │   │   ├── ads.js      # 广告查询/解锁
 │   │   ├── admin.js    # 后台管理
-│   │   └── cron.js     # GitHub Trending 定时抓取
+│   │   └── cron.js     # 私有仓库定时抓取
 │   ├── wrangler.toml   # Worker 配置
 │   └── package.json
 ├── frontend/           # Pages 前端
@@ -73,6 +73,7 @@ npx wrangler d1 migrations apply gitzw --local  # 本地测试
 | `OPENAI_API_KEY` | OpenAI API Key |
 | `RESEND_API_KEY` | Resend API Key |
 | `SITE_URL` | 网站域名（例如 `https://gitzw.com`） |
+| `GITHUB_TOKEN` | **【必需】** GitHub Personal Access Token，需有 `repo` 权限以访问私有仓库 |
 
 > **⚠️ 安全警告**：`JWT_SECRET`、`ADMIN_PASSWORD`、`OPENAI_API_KEY`、`RESEND_API_KEY`、`GITHUB_TOKEN` 等敏感变量**绝对不能通过 `wrangler.toml` 提交到 GitHub**。请始终使用 `npx wrangler secret put <变量名>` 或 Cloudflare Dashboard → Workers → 设置 → 变量 来配置生产环境密钥。`wrangler.toml` 中的 `[vars]` 仅用于本地开发测试。
 

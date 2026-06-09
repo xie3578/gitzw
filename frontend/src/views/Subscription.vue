@@ -9,8 +9,8 @@
       <div class="card setting-card">
         <div class="setting-header">
           <div>
-            <h3>📧 每日热榜推送</h3>
-            <p class="setting-desc">每天自动推送当天 GitHub 热榜仓库到你的邮箱</p>
+            <h3>📧 每日仓库推送</h3>
+<p class="setting-desc">每天自动推送当天仓库更新到你的邮箱</p>
           </div>
           <label class="toggle">
             <input type="checkbox" v-model="subs.daily" @change="saveSub('daily', subs.daily ? 'enabled' : 'disabled')" />
@@ -23,8 +23,8 @@
       <div class="card setting-card">
         <div class="setting-header">
           <div>
-            <h3>📬 每周热榜汇总</h3>
-            <p class="setting-desc">每周一推送本周热门仓库汇总</p>
+            <h3>📬 每周仓库汇总</h3>
+<p class="setting-desc">每周一推送本周仓库更新汇总</p>
           </div>
           <label class="toggle">
             <input type="checkbox" v-model="subs.weekly" @change="saveSub('weekly', subs.weekly ? 'enabled' : 'disabled')" />

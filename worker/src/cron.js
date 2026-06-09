@@ -2,152 +2,39 @@ import { Hono } from 'hono'
 import bcrypt from 'bcryptjs'
 import { fetchWithTimeout } from './lib/utils.js'
 
-const MAX_REPOS = 50
+// ========== 私有仓库列表（可改为从环境变量读取） ==========
+const PRIVATE_REPOS = [
+  "xie3578/gitzw"
+  // 未来可在此追加更多私有仓库
+]
 
-// GitHub Trending 抓取（支持中英文）
-async function fetchTrending(language = '', since = 'daily') {
-  const langParam = language ? `/${language}` : ''
-  const url = `https://github.com/trending${langParam}?since=${since}`
-
+// ========== 通过 GitHub API 获取单个私有仓库数据 ==========
+async function fetchPrivateRepo(fullName, token) {
+  const url = `https://api.github.com/repos/${fullName}`
   const response = await fetchWithTimeout(url, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    }
-  })
-
-  if (!response.ok) {
-    throw new Error(`GitHub Trending 返回 ${response.status}`)
-  }
-
-  const html = await response.text()
-  const repos = parseTrendingHTML(html)
-  return repos.slice(0, MAX_REPOS)
-}
-
-// 解析 GitHub Trending 页面的 HTML
-function parseTrendingHTML(html) {
-  const repos = []
-
-  // 匹配每个仓库卡片
-  const articleRegex = /<article\s+class="Box-row"[^>]*>([\s\S]*?)<\/article>/g
-  let match
-
-  while ((match = articleRegex.exec(html)) !== null) {
-    const card = match[1]
-    const repo = {}
-
-    // 仓库全名（owner/repo）
-    const nameMatch = card.match(/<h2[^>]*>[\s\S]*?<a[^>]*href="\/([^"]+)"[^>]*>[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/)
-    if (nameMatch) {
-      repo.full_name = (nameMatch[2].trim() + '/' + nameMatch[3].trim()).replace(/\s+/g, '')
-    } else {
-      const altMatch = card.match(/href="\/([^"]+)"[^>]*>[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/)
-      if (altMatch) {
-        repo.full_name = altMatch[1].trim()
-      }
-    }
-
-    if (!repo.full_name) continue
-
-    const parts = repo.full_name.split('/')
-    repo.owner = parts[0]?.trim() || ''
-    repo.repo_name = parts[1]?.trim() || ''
-
-    // 描述
-    const descMatch = card.match(/<p class="col-9[^"]*"[^>]*>([\s\S]*?)<\/p>/)
-    if (descMatch) {
-      repo.description_en = descMatch[1].replace(/<[^>]*>/g, '').trim()
-    }
-
-    // 编程语言
-    const langMatch = card.match(/<span itemprop="programmingLanguage"[^>]*>([\s\S]*?)<\/span>/)
-    if (langMatch) {
-      repo.language = langMatch[1].trim()
-    }
-
-    // Star 数
-    const starMatch = card.match(/<a[^>]*href="\/[^"]+\/stargazers"[^>]*>[\s\S]*?<svg[^>]*>[\s\S]*?<\/svg>\s*([\d,]+)/)
-    if (starMatch) {
-      repo.stars = parseInt(starMatch[1].replace(/,/g, '')) || 0
-    }
-
-    // Fork 数
-    const forkMatch = card.match(/<a[^>]*href="\/[^"]+\/forks"[^>]*>[\s\S]*?<svg[^>]*>[\s\S]*?<\/svg>\s*([\d,]+)/)
-    if (forkMatch) {
-      repo.forks = parseInt(forkMatch[1].replace(/,/g, '')) || 0
-    }
-
-    // 今日 Star 增长
-    const todayMatch = card.match(/<span class="d-inline-block float-sm-right"[^>]*>[\s\S]*?([\d,]+)\s*stars\s*today/)
-    if (todayMatch) {
-      repo.stars_today = parseInt(todayMatch[1].replace(/,/g, '')) || 0
-    }
-
-    // 开发者
-    const devMatch = card.match(/href="\/([^"]+)"[^>]*>\s*<img[^>]*class="avatar[^"]*"/)
-    if (devMatch) {
-      repo.developer_github = devMatch[1]
-    }
-
-    repo.github_url = `https://github.com/${repo.full_name}`
-    repo.github_id = 0
-
-    repos.push(repo)
-  }
-
-  return repos
-}
-// 通过 GitHub API 补全仓库数据
-async function enrichRepoData(repo, env) {
-  try {
-    const headers = {
-      'Accept': 'application/vnd.github.v3+json',
+      Authorization: `token ${token}`,
+      Accept: 'application/vnd.github.v3+json',
       'User-Agent': 'gitzw-crawler',
     }
-    // 如果配置了 GITHUB_TOKEN 则使用（提高速率限制）
-    if (env.GITHUB_TOKEN) {
-      headers['Authorization'] = `Bearer ${env.GITHUB_TOKEN}`
-    }
-
-    const response = await fetchWithTimeout(`https://api.github.com/repos/${repo.full_name}`, { headers })
-    if (!response.ok) return repo
-
-    const data = await response.json()
-    repo.github_id = data.id
-    repo.stars = data.stargazers_count || repo.stars
-    repo.forks = data.forks_count || repo.forks
-
-    // 开发者信息
-    if (data.owner) {
-      repo.developer_github = data.owner.login
-      repo.owner = data.owner.login
-
-      const { results: devs } = await env.DB.prepare(
-        'SELECT id FROM developers WHERE github_login = ?'
-      ).bind(data.owner.login).all()
-
-      if (devs.length > 0) {
-        repo.developer_id = devs[0].id
-      } else {
-        const devResponse = await fetchWithTimeout(`https://api.github.com/users/${data.owner.login}`, { headers })
-        if (devResponse.ok) {
-          const devData = await devResponse.json()
-          const { meta } = await env.DB.prepare(
-            'INSERT INTO developers (github_login, avatar_url, profile_url, bio_en, followers, company, location) VALUES (?, ?, ?, ?, ?, ?, ?)'
-          ).bind(
-            devData.login, devData.avatar_url, devData.html_url,
-            devData.bio || '', devData.followers || 0,
-            devData.company || '', devData.location || ''
-          ).run()
-          repo.developer_id = meta.last_row_id
-        }
-      }
-    }
-
-    return repo
-  } catch {
-    return repo
+  })
+  if (!response.ok) {
+    throw new Error(`GitHub API 返回 ${response.status} for ${fullName}`)
+  }
+  const data = await response.json()
+  // 映射为 gitzw 仓库对象格式
+  return {
+    full_name: data.full_name,
+    owner: data.owner.login,
+    repo_name: data.name,
+    description_en: data.description || '',
+    language: data.language || '',
+    stars: data.stargazers_count || 0,
+    forks: data.forks_count || 0,
+    stars_today: 0, // 私有仓库无今日增长
+    github_id: data.id,
+    github_url: data.html_url,
+    developer_github: data.owner.login,
   }
 }
 // AI 翻译（使用 OpenAI）
@@ -292,39 +179,44 @@ async function executeFetch(env, isNewOnly) {
   const logId = await createFetchLog(env, 'running')
 
   try {
-    const repos = await fetchTrending('', 'daily')
+    const token = env.GITHUB_TOKEN
+    if (!token) {
+      throw new Error('环境变量 GITHUB_TOKEN 未设置，无法抓取私有仓库')
+    }
+
     let successCount = 0
     let translateCount = 0
 
-    for (const repo of repos) {
+    for (const fullName of PRIVATE_REPOS) {
       try {
-        const enriched = await enrichRepoData(repo, env)
+        // 通过 GitHub API 获取私有仓库数据
+        const repo = await fetchPrivateRepo(fullName, token)
 
         // 检查是否已存在（新仓库才调用 AI，避免重复翻译浪费成本）
         const existing = await env.DB.prepare(
           'SELECT id, ai_summary, ai_tags FROM repositories WHERE full_name = ?'
-        ).bind(enriched.full_name).all()
+        ).bind(repo.full_name).all()
         const isNew = existing.results.length === 0
 
-        if (isNew && env.OPENAI_API_KEY && enriched.description_en) {
-          const aiResult = await aiTranslate(enriched.description_en, env.OPENAI_API_KEY)
+        if (isNew && env.OPENAI_API_KEY && repo.description_en) {
+          const aiResult = await aiTranslate(repo.description_en, env.OPENAI_API_KEY)
           if (aiResult.translated) {
-            enriched.description_zh = aiResult.translated
-            enriched.ai_tags = aiResult.tags
-            enriched.ai_summary = aiResult.summary
+            repo.description_zh = aiResult.translated
+            repo.ai_tags = aiResult.tags
+            repo.ai_summary = aiResult.summary
             translateCount++
           }
         } else if (!isNew && existing.results[0]?.ai_summary) {
           // 已有 AI 摘要的仓库保留原数据
-          enriched.description_zh = undefined
-          enriched.ai_tags = undefined
-          enriched.ai_summary = undefined
+          repo.ai_summary = existing.results[0].ai_summary
+          repo.ai_tags = existing.results[0].ai_tags
         }
 
-        await upsertRepo(enriched, env)
+        // 写入 D1
+        await upsertRepo(repo, env)
         successCount++
       } catch (err) {
-        console.error(`处理仓库 ${repo.full_name} 失败:`, err)
+        console.error(`处理仓库 ${fullName} 失败:`, err)
       }
     }
 
@@ -336,9 +228,9 @@ async function executeFetch(env, isNewOnly) {
       next_scheduled_at: new Date(Date.now() + 3 * 3600 * 1000).toISOString().replace('T', ' ').slice(0, 19)
     })
 
-    console.log(`Cron 完成: 成功处理 ${successCount}/${repos.length} 个仓库，翻译 ${translateCount} 个`)
+    console.log(`Cron 完成: 成功处理 ${successCount}/${PRIVATE_REPOS.length} 个仓库，翻译 ${translateCount} 个`)
 
-    return { total: repos.length, success: successCount, translated: translateCount }
+    return { total: PRIVATE_REPOS.length, success: successCount, translated: translateCount }
   } catch (err) {
     console.error('抓取失败:', err)
     await updateFetchLog(env, logId, {
@@ -395,7 +287,8 @@ cron.post('/fetch', async (c) => {
 
 // Cron 定时触发器入口（每 3 小时）
 export async function scheduled(event, env, ctx) {
-  console.log('Cron 触发: 开始抓取 GitHub Trending')
+  console.log(`Cron 触发: 开始抓取私有仓库 (${PRIVATE_REPOS.length} 个)`)
+  // 确保 GITHUB_TOKEN 已配置（executeFetch 内部会检查并报错）
   ctx.waitUntil(Promise.all([
     ensureAdmin(env),
     executeFetch(env, false)
