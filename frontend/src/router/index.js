@@ -4,6 +4,7 @@ const routes = [
   { path: '/', name: 'Home', component: () => import('../views/Home.vue') },
   { path: '/login', name: 'Login', component: () => import('../views/Login.vue') },
   { path: '/favorites', name: 'Favorites', component: () => import('../views/Favorites.vue'), meta: { requiresAuth: true } },
+  { path: '/subscription', name: 'Subscription', component: () => import('../views/Subscription.vue'), meta: { requiresAuth: true } },
   { path: '/admin', name: 'Admin', component: () => import('../views/Admin.vue'), meta: { requiresAuth: true, requiresAdmin: true } }
 ]
 

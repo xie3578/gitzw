@@ -7,6 +7,7 @@
       <div class="nav-links">
         <router-link to="/" class="nav-link">热榜</router-link>
         <router-link v-if="token" to="/favorites" class="nav-link">收藏</router-link>
+        <router-link v-if="token" to="/subscription" class="nav-link">订阅</router-link>
         <router-link v-if="isAdmin" to="/admin" class="nav-link">管理</router-link>
         <template v-if="token">
           <span class="nav-user">{{ user.nickname || user.email }}</span>
