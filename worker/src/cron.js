@@ -1,13 +1,26 @@
 import { Hono } from 'hono'
 
-const cron = new Hono()
+const FETCH_TIMEOUT_MS = 15000
+const MAX_REPOS = 50
+
+// 带超时的 fetch 封装
+async function fetchWithTimeout(url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const resp = await fetch(url, { ...options, signal: controller.signal })
+    return resp
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 // GitHub Trending 抓取（支持中英文）
 async function fetchTrending(language = '', since = 'daily') {
   const langParam = language ? `/${language}` : ''
   const url = `https://github.com/trending${langParam}?since=${since}`
-  
-  const response = await fetch(url, {
+
+  const response = await fetchWithTimeout(url, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -20,13 +33,13 @@ async function fetchTrending(language = '', since = 'daily') {
 
   const html = await response.text()
   const repos = parseTrendingHTML(html)
-  return repos
+  return repos.slice(0, MAX_REPOS)
 }
 
 // 解析 GitHub Trending 页面的 HTML
 function parseTrendingHTML(html) {
   const repos = []
-  
+
   // 匹配每个仓库卡片
   const articleRegex = /<article\s+class="Box-row"[^>]*>([\s\S]*?)<\/article>/g
   let match
@@ -40,7 +53,6 @@ function parseTrendingHTML(html) {
     if (nameMatch) {
       repo.full_name = (nameMatch[2].trim() + '/' + nameMatch[3].trim()).replace(/\s+/g, '')
     } else {
-      // 备用匹配
       const altMatch = card.match(/href="\/([^"]+)"[^>]*>[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/)
       if (altMatch) {
         repo.full_name = altMatch[1].trim()
@@ -49,7 +61,6 @@ function parseTrendingHTML(html) {
 
     if (!repo.full_name) continue
 
-    // 解析 owner 和 repo_name
     const parts = repo.full_name.split('/')
     repo.owner = parts[0]?.trim() || ''
     repo.repo_name = parts[1]?.trim() || ''
@@ -84,16 +95,13 @@ function parseTrendingHTML(html) {
       repo.stars_today = parseInt(todayMatch[1].replace(/,/g, '')) || 0
     }
 
-    // 开发者（关联的开发者账号）
+    // 开发者
     const devMatch = card.match(/href="\/([^"]+)"[^>]*>\s*<img[^>]*class="avatar[^"]*"/)
     if (devMatch) {
       repo.developer_github = devMatch[1]
     }
 
-    // 构建 github_url
     repo.github_url = `https://github.com/${repo.full_name}`
-
-    // 获取 github_id（从仓库 API，暂缺，使用后续步骤补充）
     repo.github_id = 0
 
     repos.push(repo)
@@ -101,17 +109,19 @@ function parseTrendingHTML(html) {
 
   return repos
 }
-
-// 通过 GitHub API 补全仓库的 github_id 和开发者信息
+// 通过 GitHub API 补全仓库数据
 async function enrichRepoData(repo, env) {
   try {
-    // 调用 GitHub API 获取仓库详情
-    const response = await fetch(`https://api.github.com/repos/${repo.full_name}`, {
-      headers: {
-        'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': 'gitzw-crawler',
-      }
-    })
+    const headers = {
+      'Accept': 'application/vnd.github.v3+json',
+      'User-Agent': 'gitzw-crawler',
+    }
+    // 如果配置了 GITHUB_TOKEN 则使用（提高速率限制）
+    if (env.GITHUB_TOKEN) {
+      headers['Authorization'] = `Bearer ${env.GITHUB_TOKEN}`
+    }
+
+    const response = await fetchWithTimeout(`https://api.github.com/repos/${repo.full_name}`, { headers })
     if (!response.ok) return repo
 
     const data = await response.json()
@@ -123,8 +133,7 @@ async function enrichRepoData(repo, env) {
     if (data.owner) {
       repo.developer_github = data.owner.login
       repo.owner = data.owner.login
-      
-      // 检查或创建开发者记录
+
       const { results: devs } = await env.DB.prepare(
         'SELECT id FROM developers WHERE github_login = ?'
       ).bind(data.owner.login).all()
@@ -132,10 +141,7 @@ async function enrichRepoData(repo, env) {
       if (devs.length > 0) {
         repo.developer_id = devs[0].id
       } else {
-        // 创建开发者记录
-        const devResponse = await fetch(`https://api.github.com/users/${data.owner.login}`, {
-          headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'gitzw-crawler' }
-        })
+        const devResponse = await fetchWithTimeout(`https://api.github.com/users/${data.owner.login}`, { headers })
         if (devResponse.ok) {
           const devData = await devResponse.json()
           const { meta } = await env.DB.prepare(
@@ -155,13 +161,12 @@ async function enrichRepoData(repo, env) {
     return repo
   }
 }
-
-// AI 翻译（使用 OpenAI 或 Cloudflare AI）
+// AI 翻译（使用 OpenAI）
 async function aiTranslate(text, apiKey) {
   if (!text || !apiKey) return { translated: '', tags: '', summary: '' }
-  
+
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -185,7 +190,7 @@ async function aiTranslate(text, apiKey) {
 
     const data = await response.json()
     const content = data.choices?.[0]?.message?.content || ''
-    
+
     try {
       const parsed = JSON.parse(content)
       return {
@@ -208,7 +213,6 @@ async function upsertRepo(repo, env) {
   ).bind(repo.full_name).all()
 
   if (existing.results.length > 0) {
-    // 更新
     await env.DB.prepare(
       `UPDATE repositories SET 
         stars=?, forks=?, stars_today=?, description_en=?,
@@ -220,7 +224,6 @@ async function upsertRepo(repo, env) {
       repo.full_name
     ).run()
   } else {
-    // 插入
     await env.DB.prepare(
       `INSERT INTO repositories 
        (github_id, full_name, owner, repo_name, description_en,
@@ -238,25 +241,28 @@ async function upsertRepo(repo, env) {
   }
 }
 
-// POST /fetch 手动触发抓取（需要管理权限）
+const cron = new Hono()
+
+// POST /fetch 手动触发抓取
 cron.post('/fetch', async (c) => {
   try {
-    const body = await c.req.json().catch(() => ({}))
-    const language = body.language || ''
-    const since = body.since || 'daily'
+    let body = {}
+    try {
+      body = await c.req.json()
+    } catch (_) {}
 
-    // 抓取 Trending
+    const language = typeof body.language === 'string' ? body.language.trim() : ''
+    const since = typeof body.since === 'string' && ['daily', 'weekly', 'monthly'].includes(body.since) ? body.since : 'daily'
+
+    if (language.length > 50) return c.json({ error: 'language 参数过长' }, 400)
+
     const repos = await fetchTrending(language, since)
     let successCount = 0
     let translateCount = 0
 
-    // 处理每个仓库
     for (const repo of repos) {
       try {
-        // 补全数据（GitHub API）
         const enriched = await enrichRepoData(repo, c.env)
-        
-        // AI 翻译（如果有 OpenAI Key）
         if (c.env.OPENAI_API_KEY && enriched.description_en) {
           const aiResult = await aiTranslate(enriched.description_en, c.env.OPENAI_API_KEY)
           if (aiResult.translated) {
@@ -266,8 +272,6 @@ cron.post('/fetch', async (c) => {
             translateCount++
           }
         }
-
-        // 写入数据库
         await upsertRepo(enriched, c.env)
         successCount++
       } catch (err) {
@@ -286,15 +290,12 @@ cron.post('/fetch', async (c) => {
   }
 })
 
-// Cron 定时触发器入口（每小时自动执行）
+// Cron 定时触发器入口
 export async function scheduled(event, env, ctx) {
   console.log('Cron 触发: 开始抓取 GitHub Trending')
-
   try {
-    // 抓取所有语言的每日趋势
     const repos = await fetchTrending('', 'daily')
     let successCount = 0
-
     for (const repo of repos) {
       try {
         const enriched = await enrichRepoData(repo, env)
@@ -312,7 +313,6 @@ export async function scheduled(event, env, ctx) {
         console.error(`Cron 处理 ${repo.full_name} 失败:`, err)
       }
     }
-
     console.log(`Cron 完成: 成功处理 ${successCount}/${repos.length} 个仓库`)
   } catch (err) {
     console.error('Cron 抓取失败:', err)
