@@ -1,18 +1,5 @@
 import { Hono } from 'hono'
-
-const FETCH_TIMEOUT_MS = 15000
-
-async function fetchWithTimeout(url, options, timeoutMs) {
-  timeoutMs = timeoutMs || FETCH_TIMEOUT_MS
-  const controller = new AbortController()
-  const timer = setTimeout(function() { controller.abort() }, timeoutMs)
-  try {
-    const resp = await fetch(url, Object.assign({}, options, { signal: controller.signal }))
-    return resp
-  } finally {
-    clearTimeout(timer)
-  }
-}
+import { fetchWithTimeout } from './lib/utils.js'
 
 function buildRepoRows(repos) {
   var rows = ''

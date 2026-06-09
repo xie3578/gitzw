@@ -1,19 +1,7 @@
 import { Hono } from 'hono'
+import { fetchWithTimeout } from './lib/utils.js'
 
-const FETCH_TIMEOUT_MS = 15000
 const MAX_REPOS = 50
-
-// 带超时的 fetch 封装
-async function fetchWithTimeout(url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const resp = await fetch(url, { ...options, signal: controller.signal })
-    return resp
-  } finally {
-    clearTimeout(timer)
-  }
-}
 
 // GitHub Trending 抓取（支持中英文）
 async function fetchTrending(language = '', since = 'daily') {

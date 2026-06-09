@@ -1,14 +1,9 @@
 import { Hono } from 'hono'
 import { sign, verify } from 'hono/jwt'
 import bcrypt from 'bcryptjs'
+import { getJwtSecret, validateRequired, isValidEmail } from './lib/auth.js'
 
 const auth = new Hono()
-
-function getJwtSecret(c) {
-  const secret = c.env.JWT_SECRET
-  if (!secret) throw new Error('JWT_SECRET 环境变量未设置')
-  return secret
-}
 
 async function generateToken(user, c) {
   const payload = {
@@ -35,18 +30,6 @@ async function getAuthUser(c) {
   const user = await getOptionalUser(c)
   if (!user) throw new Error('UNAUTHORIZED')
   return user
-}
-
-function validateRequired(fields, body) {
-  for (const field of fields) {
-    if (body[field] === undefined || body[field] === null) return `${field} 不能为空`
-    if (typeof body[field] === 'string' && !body[field].trim()) return `${field} 不能为空`
-  }
-  return null
-}
-
-function isValidEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
 // POST /register

@@ -1,11 +1,6 @@
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
-
-function getJwtSecret(c) {
-  const secret = c.env.JWT_SECRET
-  if (!secret) throw new Error('JWT_SECRET 环境变量未设置')
-  return secret
-}
+import { getJwtSecret } from './lib/auth.js'
 
 const ads = new Hono()
 

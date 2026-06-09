@@ -1,18 +1,13 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { jwt } from 'hono/jwt'
+import { getJwtSecret } from './lib/auth.js'
 import auth from './auth'
 import repos from './repos'
 import favorites from './favorites'
 import ads from './ads'
 import admin from './admin'
 import cron from './cron'
-
-function getJwtSecret(c) {
-  const secret = c.env.JWT_SECRET
-  if (!secret) throw new Error('JWT_SECRET 环境变量未设置')
-  return secret
-}
 
 const app = new Hono()
 

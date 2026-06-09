@@ -1,37 +1,7 @@
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
-
-// 辅助：从环境变量读取 JWT_SECRET，无回退默认值
-function getJwtSecret(c) {
-  const secret = c.env.JWT_SECRET
-  if (!secret) throw new Error('JWT_SECRET 环境变量未设置')
-  return secret
-}
-
-// 辅助：数字解析与校验
-function parsePositiveInt(val, fieldName) {
-  const n = parseInt(val, 10)
-  if (isNaN(n) || n < 0) throw new Error(`${fieldName} 必须是非负整数`)
-  return n
-}
-
-function parseNonEmptyString(val, fieldName) {
-  if (typeof val !== 'string' || val.trim().length === 0) throw new Error(`${fieldName} 不能为空`)
-  return val.trim()
-}
-
-function parseOptionalString(val) {
-  if (!val || typeof val !== 'string') return null
-  return val.trim()
-}
-
-// 辅助：数字字段可选解析
-function parseOptionalInt(val) {
-  if (val === undefined || val === null) return undefined
-  const n = parseInt(val, 10)
-  if (isNaN(n)) throw new Error('字段格式不正确')
-  return n
-}
+import { getJwtSecret } from './lib/auth.js'
+import { parsePositiveInt, parseNonEmptyString, parseOptionalString, parseOptionalInt } from './lib/utils.js'
 
 const admin = new Hono()
 

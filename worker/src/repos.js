@@ -1,11 +1,7 @@
 import { Hono } from 'hono'
 import { verify } from 'hono/jwt'
-
-function getJwtSecret(c) {
-  const secret = c.env.JWT_SECRET
-  if (!secret) throw new Error('JWT_SECRET 环境变量未设置')
-  return secret
-}
+import { getJwtSecret } from './lib/auth.js'
+import { parsePage, parseLimit } from './lib/utils.js'
 
 // 工具：从请求头解析 token 获取用户（可选登录）
 async function getOptionalUser(c) {
@@ -19,18 +15,6 @@ async function getOptionalUser(c) {
   } catch {
     return null
   }
-}
-
-function parsePage(val) {
-  const n = parseInt(val, 10)
-  if (isNaN(n) || n < 1) return 1
-  return n
-}
-
-function parseLimit(val, max = 100) {
-  const n = parseInt(val, 10)
-  if (isNaN(n) || n < 1) return 20
-  return Math.min(n, max)
 }
 
 const repos = new Hono()
