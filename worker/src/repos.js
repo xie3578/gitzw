@@ -1,21 +1,6 @@
 import { Hono } from 'hono'
-import { verify } from 'hono/jwt'
-import { getJwtSecret } from './lib/auth.js'
+import { getJwtSecret, getOptionalUser } from './lib/auth.js'
 import { parsePage, parseLimit } from './lib/utils.js'
-
-// 工具：从请求头解析 token 获取用户（可选登录）
-async function getOptionalUser(c) {
-  const authHeader = c.req.header('Authorization')
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null
-  try {
-    const token = authHeader.slice(7)
-    const secret = getJwtSecret(c)
-    const payload = await verify(token, secret)
-    return payload
-  } catch {
-    return null
-  }
-}
 
 const repos = new Hono()
 

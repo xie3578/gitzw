@@ -1,36 +1,6 @@
 import { Hono } from 'hono'
-import { sign, verify } from 'hono/jwt'
 import bcrypt from 'bcryptjs'
-import { getJwtSecret, validateRequired, isValidEmail } from './lib/auth.js'
-
-const auth = new Hono()
-
-async function generateToken(user, c) {
-  const payload = {
-    userId: user.id,
-    email: user.email,
-    role: user.role || 'user',
-    exp: Math.floor(Date.now() / 1000) + 7 * 24 * 3600,
-  }
-  return await sign(payload, getJwtSecret(c))
-}
-
-async function getOptionalUser(c) {
-  const authHeader = c.req.header('Authorization')
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null
-  try {
-    const token = authHeader.slice(7)
-    return await verify(token, getJwtSecret(c))
-  } catch {
-    return null
-  }
-}
-
-async function getAuthUser(c) {
-  const user = await getOptionalUser(c)
-  if (!user) throw new Error('UNAUTHORIZED')
-  return user
-}
+import { getJwtSecret, validateRequired, isValidEmail, generateToken, getOptionalUser, getAuthUser } from './lib/auth.js'
 
 // POST /register
 auth.post('/register', async (c) => {
