@@ -4,7 +4,7 @@
 
 ## 功能特点
 
-- 📊 每小时自动抓取 GitHub Trending 仓库
+- 📊 每 3 小时自动抓取 GitHub Trending 仓库
 - 🌐 AI 自动翻译仓库名、描述为中文，生成摘要和标签
 - 👤 用户注册/登录，收藏仓库
 - 📧 邮件订阅每日热门仓库推送
@@ -72,7 +72,9 @@ npx wrangler d1 migrations apply gitzw --local  # 本地测试
 | `JWT_SECRET` | JWT 密钥（随机字符串） |
 | `OPENAI_API_KEY` | OpenAI API Key |
 | `RESEND_API_KEY` | Resend API Key |
-| `SITE_URL` | 网站域名 |
+| `SITE_URL` | 网站域名（例如 `https://gitzw.com`） |
+
+> **⚠️ 安全警告**：`JWT_SECRET`、`ADMIN_PASSWORD`、`OPENAI_API_KEY`、`RESEND_API_KEY`、`GITHUB_TOKEN` 等敏感变量**绝对不能通过 `wrangler.toml` 提交到 GitHub**。请始终使用 `npx wrangler secret put <变量名>` 或 Cloudflare Dashboard → Workers → 设置 → 变量 来配置生产环境密钥。`wrangler.toml` 中的 `[vars]` 仅用于本地开发测试。
 
 ### 3. 部署 Worker
 
@@ -93,7 +95,7 @@ npm run build
 
 ### 5. 设置 Cron 定时任务
 
-Worker 中的 `wrangler.toml` 已配置每小时触发（`"0 * * * *"`），
+Worker 中的 `wrangler.toml` 已配置每 3 小时触发（`"0 */3 * * *"`），
 也可手动访问 `https://your-worker.workers.dev/api/cron/fetch` 触发抓取。
 
 ### 6. 绑定域名

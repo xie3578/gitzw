@@ -72,6 +72,45 @@
       </div>
     </div>
 
+    <!-- 抓取状态 -->
+    <div v-if="activeTab === 'fetch'">
+      <div v-if="fetchLoading" class="loading">加载中...</div>
+      <div v-else class="fetch-status-grid">
+        <div class="card fetch-card">
+          <h3>最近抓取</h3>
+          <p class="fetch-time">{{ fetchStatus.lastFetchedAt || '从未抓取' }}</p>
+        </div>
+        <div class="card fetch-card">
+          <h3>下次抓取</h3>
+          <p class="fetch-time">{{ fetchStatus.nextScheduledAt || '—' }}</p>
+        </div>
+        <div class="card fetch-card">
+          <h3>抓取间隔</h3>
+          <p class="fetch-time">3 小时</p>
+        </div>
+        <div class="card fetch-card">
+          <h3>状态</h3>
+          <p class="fetch-status" :class="statusClass">{{ fetchStatus.statusLabel || '未知' }}</p>
+        </div>
+        <div class="card fetch-card full-width">
+          <h3>上次抓取详情</h3>
+          <div v-if="fetchStatus.lastFetch">
+            <p><strong>开始时间：</strong>{{ fetchStatus.lastFetch.started_at || '—' }}</p>
+            <p><strong>结束时间：</strong>{{ fetchStatus.lastFetch.finished_at || '—' }}</p>
+            <p><strong>仓库数：</strong>{{ fetchStatus.lastFetch.repositories_count || 0 }}</p>
+            <p v-if="fetchStatus.lastFetch.error_message"><strong>错误信息：</strong><span class="error-text">{{ fetchStatus.lastFetch.error_message }}</span></p>
+          </div>
+          <p v-else class="empty-tip">暂无抓取记录</p>
+        </div>
+        <div class="card fetch-card actions-card full-width">
+          <button class="btn btn-primary" :disabled="fetchingNow" @click="triggerFetch">
+            {{ fetchingNow ? '抓取中...' : '🔄 手动触发抓取' }}
+          </button>
+          <p v-if="fetchMsg" class="fetch-msg">{{ fetchMsg }}</p>
+        </div>
+      </div>
+    </div>
+
     <!-- 用户管理 -->
     <div v-if="activeTab === 'users'">
       <table v-if="userList.length" class="admin-table">
@@ -101,13 +140,17 @@ const tabs = [
   { key: 'dashboard', label: '仪表盘' },
   { key: 'repos', label: '仓库管理' },
   { key: 'ads', label: '广告管理' },
+  { key: 'fetch', label: '抓取状态' },
   { key: 'users', label: '用户管理' }
 ]
 
 // 仪表盘
 const dashboard = ref({})
 const dashboardLoading = ref(true)
-onMounted(fetchDashboard)
+onMounted(() => {
+  fetchDashboard()
+  loadFetchStatus()
+})
 async function fetchDashboard() {
   try {
     dashboardLoading.value = true
@@ -170,6 +213,47 @@ async function deleteAd(id) {
   fetchAds()
 }
 
+// 抓取状态
+const fetchStatus = ref({ lastFetch: null })
+const fetchLoading = ref(false)
+const fetchingNow = ref(false)
+const fetchMsg = ref('')
+const statusClass = ref('')
+
+async function loadFetchStatus() {
+  fetchLoading.value = true
+  try {
+    const res = await api.get('/cron/status')
+    const data = res.data || {}
+    fetchStatus.value = data
+
+    // 更新状态标签和样式
+    if (data.statusLabel === '成功') statusClass.value = 'status-ok'
+    else if (data.statusLabel === '失败' || data.statusLabel === '错误') statusClass.value = 'status-err'
+    else if (data.statusLabel === '抓取中') statusClass.value = 'status-running'
+    else statusClass.value = 'status-unknown'
+  } catch (e) {
+    fetchStatus.value = { statusLabel: '无法连接', lastFetch: null }
+    statusClass.value = 'status-err'
+  } finally {
+    fetchLoading.value = false
+  }
+}
+async function triggerFetch() {
+  if (fetchingNow.value) return
+  fetchingNow.value = true
+  fetchMsg.value = ''
+  try {
+    const res = await api.post('/cron/fetch')
+    fetchMsg.value = res.data?.message || '抓取任务已触发'
+    await loadFetchStatus()
+  } catch (e) {
+    fetchMsg.value = e.response?.data?.error || '触发抓取失败'
+  } finally {
+    fetchingNow.value = false
+  }
+}
+
 // 用户管理
 const userList = ref([])
 onMounted(fetchUsers)
@@ -201,6 +285,19 @@ async function updateUserRole(user) {
 .btn-sm { padding: 4px 10px; font-size: 12px; margin-right: 4px; }
 .role-select { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 4px; border-radius: 4px; font-size: 12px; }
 .empty-tip { text-align: center; padding: 40px; color: #8b949e; }
+.fetch-status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.fetch-card { text-align: center; }
+.fetch-card h3 { font-size: 14px; color: #8b949e; margin-bottom: 8px; }
+.fetch-time { font-size: 18px; font-weight: 600; color: #f0f6fc; }
+.fetch-status { font-size: 24px; font-weight: 700; padding: 8px 0; }
+.status-ok { color: #3fb950; }
+.status-err { color: #f85149; }
+.status-running { color: #d29922; }
+.status-unknown { color: #8b949e; }
+.actions-card { grid-column: 1 / -1; padding: 20px; }
+.full-width { grid-column: 1 / -1; }
+.fetch-msg { margin-top: 12px; font-size: 13px; color: #8b949e; }
+.error-text { color: #f85149; font-size: 13px; }
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .modal { width: 480px; max-width: 90vw; padding: 24px; max-height: 80vh; overflow-y: auto; }
 .modal h3 { margin-bottom: 16px; }

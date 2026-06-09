@@ -1,8 +1,5 @@
 <template>
   <div class="home-page">
-    <!-- 广告横幅（带倒计时） -->
-    <AdCountdown v-if="topAd" :ad="topAd" @dismissed="onAdDismissed" />
-
     <!-- 筛选栏 -->
     <div class="filter-bar">
       <select v-model="language" @change="fetchRepos(1)" class="lang-select">
@@ -46,7 +43,6 @@
 import { ref, onMounted } from 'vue'
 import api from '../api.js'
 import RepoCard from '../components/RepoCard.vue'
-import AdCountdown from '../components/AdCountdown.vue'
 
 const repos = ref([])
 const languages = ref([])
@@ -58,31 +54,15 @@ const language = ref('')
 const keyword = ref('')
 const favoritedIds = ref(new Set())
 
-// 广告
-const topAd = ref(null)
+const title = 'GitHub 中文热榜'
 
 onMounted(async () => {
   await Promise.all([
     fetchLanguages(),
     fetchRepos(1),
-    fetchFavoritedIds(),
-    fetchTopAd()
+    fetchFavoritedIds()
   ])
 })
-
-async function fetchTopAd() {
-  try {
-    const res = await api.get('/ads', { params: { placement: 'home_top', limit: 1 } })
-    const ads = res.data.ads || res.data.data || res.data || []
-    topAd.value = ads.length > 0 ? ads[0] : null
-  } catch (e) {
-    // 非关键请求，静默失败
-  }
-}
-
-function onAdDismissed(adId) {
-  topAd.value = null
-}
 
 async function fetchLanguages() {
   try {

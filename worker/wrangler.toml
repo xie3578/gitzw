@@ -17,6 +17,10 @@ new_directory = "migrations/001_create_tables.sql"
 tag = "v2"
 new_directory = "migrations/002_add_indexes.sql"
 
+[[migrations]]
+tag = "v3"
+new_directory = "migrations/003_create_fetch_logs.sql"
+
 # ========== 环境变量 ==========
 # 🔴 重要：部署前必须设置以下环境变量
 # 通过 `npx wrangler secret put JWT_SECRET` 设置生产密钥
@@ -30,6 +34,6 @@ RESEND_API_KEY = ""
 OPENAI_API_KEY = ""
 SITE_URL = "https://gitzw.pages.dev"
 
-# Cron 定时任务（每小时抓取 GitHub Trending）
+# Cron 定时任务（每 3 小时抓取 GitHub Trending）
 [triggers]
-crons = ["0 * * * *"]
+crons = ["0 */3 * * *"]
