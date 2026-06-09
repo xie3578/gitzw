@@ -67,4 +67,16 @@ app.onError((err, c) => {
 // 404
 app.notFound((c) => c.json({ error: '接口不存在' }, 404))
 
-export default app
+// 默认导出：同时暴露 HTTP 请求处理与定时任务
+export default {
+  fetch: async (request, env, ctx) => {
+    return app.handleRequest(request, env, ctx)
+  },
+  async scheduled(event, env, ctx) {
+    const { executeFetch, ensureAdmin } = await import('./cron_fns.js')
+    ctx.waitUntil(Promise.all([
+      ensureAdmin(env),
+      executeFetch(env)
+    ]))
+  }
+}
